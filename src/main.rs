@@ -11,16 +11,15 @@ fn main() -> Result<()> {
 
     let mut file = File::open(path)?;
     let mut buf = Vec::new();
-    let result = file
-        .read_to_end(&mut buf)
-        .and_then(|_| cat_file_p(buf.as_slice()))?;
+    let result = file.read_to_end(&mut buf).and_then(|_| cat_file_p(&buf))?;
 
-    print!("{}", result);
+    println!("{}", result);
+
     Ok(())
 }
 
 fn parse_path(hash: String) -> Result<PathBuf> {
     let current_dir = env::current_dir()?;
     let (sub_dir, file) = hash.split_at(2);
-    Ok(current_dir.join(sub_dir).join(file))
+    Ok(current_dir.join(".git/objects").join(sub_dir).join(file))
 }
