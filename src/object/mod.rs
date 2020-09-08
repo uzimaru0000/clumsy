@@ -40,11 +40,19 @@ impl GitObject {
         }
     }
 
-    pub fn calc_hash(&self) -> String {
+    pub fn calc_hash(&self) -> Vec<u8> {
         match self {
             Self::Blob(obj) => obj.calc_hash(),
             Self::Tree(obj) => obj.calc_hash().unwrap_or_default(),
-            Self::Commit(obj) => String::from("no impl"),
+            Self::Commit(obj) => obj.calc_hash(),
+        }
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Blob(obj) => obj.as_bytes(),
+            Self::Tree(obj) => obj.as_bytes().unwrap_or_default(),
+            Self::Commit(obj) => obj.as_bytes(),
         }
     }
 }

@@ -1,7 +1,8 @@
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
+use sha1::{Digest, Sha1};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct User {
     name: String,
     email: String,
@@ -164,6 +165,18 @@ impl Commit {
             message,
         ))
     }
+
+    pub fn calc_hash(&self) -> Vec<u8> {
+        Vec::from(Sha1::digest(&self.as_bytes()).as_slice())
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let content = format!("{}", self);
+        let header = format!("commit {}\0", content.len());
+        let val = format!("{}{}", header, content);
+
+        Vec::from(val.as_bytes())
+    }
 }
 
 impl fmt::Display for Commit {
@@ -179,7 +192,7 @@ impl fmt::Display for Commit {
 
         write!(
             f,
-            "{}\n{}{}\n{}\n\n{}",
+            "{}\n{}{}\n{}\n\n{}\n",
             tree, parent, author, committer, self.message
         )
     }

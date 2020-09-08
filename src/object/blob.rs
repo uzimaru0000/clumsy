@@ -28,11 +28,15 @@ impl Blob {
         }
     }
 
-    pub fn calc_hash(&self) -> String {
+    pub fn calc_hash(&self) -> Vec<u8> {
+        Vec::from(Sha1::digest(&self.as_bytes()).as_slice())
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
         let header = format!("{} {}\0", ObjectType::Blob.to_string(), self.size);
         let store = format!("{}{}", header, self.to_string());
 
-        format!("{:x}", Sha1::digest(store.as_bytes()))
+        Vec::from(store.as_bytes())
     }
 }
 
