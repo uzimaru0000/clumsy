@@ -1,5 +1,5 @@
-use gitto::object::GitObject;
-use gitto::*;
+use clumsy::object::GitObject;
+use clumsy::*;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
