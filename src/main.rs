@@ -33,10 +33,12 @@ fn add(file_name: String) -> Result<()> {
 }
 
 fn commit(message: String) -> Result<()> {
+    // git write-tree
     let tree = write_tree().map(GitObject::Tree)?;
     write_object(&tree)?;
 
     let tree_hash = tree.calc_hash();
+    // echo message | git commit-tree <hash>
     let commit = commit_tree(
         "uzimaru0000".to_string(),
         "shuji365630@gmail.com".to_string(),
@@ -46,6 +48,7 @@ fn commit(message: String) -> Result<()> {
     .map(GitObject::Commit)?;
     write_object(&commit)?;
 
+    // git update-ref refs/heads/master <hash>
     update_ref(head_ref()?, &commit.calc_hash())?;
 
     Ok(())
