@@ -2,7 +2,6 @@ use clumsy::fs::FileSystem;
 use clumsy::object::GitObject;
 use clumsy::*;
 use std::collections::HashMap;
-use std::env;
 use std::io;
 
 #[derive(Debug)]
@@ -139,8 +138,6 @@ impl FileSystem for InMemFileSystem {
 }
 
 fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-
     let mut fs = InMemFileSystem::init();
     fs.write("test.txt".to_string(), b"Hello, World")?;
     let mut git = Git::new(fs);
