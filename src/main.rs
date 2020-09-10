@@ -1,55 +1,232 @@
+use clumsy::fs::FileSystem;
 use clumsy::object::GitObject;
 use clumsy::*;
+use std::collections::HashMap;
 use std::env;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::Result;
+use std::io;
 
-fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
+#[derive(Debug)]
+enum Entity {
+    Dir(HashMap<String, Entity>),
+    File(Vec<u8>),
+}
 
-    match args[1].as_str() {
-        "add" => add(args[2].clone()),
-        "commit" => commit(args[2].clone()),
-        _ => Ok(()),
+impl Entity {
+    pub fn change_dir(&self, path: String) -> io::Result<&Entity> {
+        path.split("/").try_fold(self, |st, x| match st {
+            Self::File(_) => Err(io::Error::from(io::ErrorKind::NotFound)),
+            Self::Dir(dir) => dir.get(x).ok_or(io::Error::from(io::ErrorKind::NotFound)),
+        })
+    }
+
+    pub fn change_dir_mut(&mut self, path: String) -> io::Result<&mut Entity> {
+        path.split("/").try_fold(self, |st, x| match st {
+            Self::File(_) => Err(io::Error::from(io::ErrorKind::NotFound)),
+            Self::Dir(dir) => dir
+                .get_mut(x)
+                .ok_or(io::Error::from(io::ErrorKind::NotFound)),
+        })
+    }
+
+    pub fn read(&self) -> io::Result<Vec<u8>> {
+        if let Self::File(data) = self {
+            Ok(data.clone())
+        } else {
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        }
+    }
+
+    pub fn write(&mut self, name: String, data: &[u8]) -> io::Result<()> {
+        if let Self::Dir(dir) = self {
+            dir.insert(name, Self::File(data.to_vec()));
+            Ok(())
+        } else {
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        }
+    }
+
+    pub fn make_dir(&mut self, name: String) -> io::Result<()> {
+        if let Self::Dir(dir) = self {
+            dir.insert(name, Self::Dir(HashMap::new()));
+            Ok(())
+        } else {
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        }
     }
 }
 
-fn add(file_name: String) -> Result<()> {
-    let path = env::current_dir().map(|x| x.join(&file_name))?;
-    let mut file = File::open(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
+#[derive(Debug)]
+struct InMemFileSystem {
+    root: Entity,
+}
 
-    // git hash-object -w path
-    let blob = hash_object(&bytes).map(GitObject::Blob)?;
-    write_object(&blob)?;
+impl InMemFileSystem {
+    pub fn init() -> Self {
+        let root = Entity::Dir(
+            vec![(
+                ".git".to_owned(),
+                Entity::Dir(
+                    vec![
+                        ("objects".to_owned(), Entity::Dir(HashMap::new())),
+                        (
+                            "refs".to_owned(),
+                            Entity::Dir(
+                                vec![("heads".to_owned(), Entity::Dir(HashMap::new()))]
+                                    .into_iter()
+                                    .collect::<HashMap<_, _>>(),
+                            ),
+                        ),
+                        (
+                            "HEAD".to_owned(),
+                            Entity::File(b"ref: refs/heads/master".to_vec()),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect::<HashMap<_, _>>(),
+                ),
+            )]
+            .into_iter()
+            .collect::<HashMap<_, _>>(),
+        );
 
-    // git update-index --add --cacheinfo <mode> <hash> <name>
-    let index = update_index(&blob.calc_hash(), file_name)?;
-    write_index(&index)?;
+        Self { root }
+    }
+}
+
+impl FileSystem for InMemFileSystem {
+    fn read(&self, path: String) -> io::Result<Vec<u8>> {
+        self.root.change_dir(path).and_then(|x| x.read())
+    }
+
+    fn write(&mut self, path: String, data: &[u8]) -> io::Result<()> {
+        let (dir_name, file) = path_split(path);
+
+        if dir_name.len() > 0 {
+            self.root.change_dir_mut(dir_name.join("/"))
+        } else {
+            Ok(&mut self.root)
+        }
+        .and_then(|x| x.write(file, data))
+    }
+
+    fn stat(&self, path: String) -> io::Result<fs::Metadata> {
+        let entity = self.root.change_dir(path)?;
+
+        if let Entity::File(_) = entity {
+            Ok(fs::Metadata {
+                dev: 0,
+                ino: 0,
+                mode: 33188,
+                uid: 0,
+                gid: 0,
+                size: 0,
+                mtime: 0,
+                mtime_nsec: 0,
+                ctime: 0,
+                ctime_nsec: 0,
+            })
+        } else {
+            Err(io::Error::from(io::ErrorKind::InvalidData))
+        }
+    }
+
+    fn create_dir(&mut self, path: String) -> io::Result<()> {
+        let (dir_name, dir) = path_split(path);
+        self.root
+            .change_dir_mut(dir_name.join("/"))
+            .and_then(|x| x.make_dir(dir))
+    }
+}
+
+fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    let mut fs = InMemFileSystem::init();
+    fs.write("test.txt".to_string(), b"Hello, World")?;
+    let mut git = Git::new(fs);
+
+    add(&mut git, "test.txt".to_string(), b"Hello, World")?;
+    commit(&mut git, "init commit".to_string())?;
+
+    let commit = log(&mut git)?;
+    println!("{}", commit);
 
     Ok(())
 }
 
-fn commit(message: String) -> Result<()> {
+pub fn add<F: FileSystem>(git: &mut Git<F>, file_name: String, bytes: &[u8]) -> io::Result<()> {
+    // git hash-object -w path
+    let blob = git.hash_object(&bytes).map(GitObject::Blob)?;
+    git.write_object(&blob)?;
+
+    // git update-index --add --cacheinfo <mode> <hash> <name>
+    let index = git.update_index(&blob.calc_hash(), file_name)?;
+    git.write_index(&index)?;
+
+    Ok(())
+}
+
+fn commit<F: FileSystem>(git: &mut Git<F>, message: String) -> io::Result<()> {
     // git write-tree
-    let tree = write_tree().map(GitObject::Tree)?;
-    write_object(&tree)?;
+    let tree = git.write_tree().map(GitObject::Tree)?;
+    git.write_object(&tree)?;
 
     let tree_hash = tree.calc_hash();
     // echo message | git commit-tree <hash>
-    let commit = commit_tree(
-        "uzimaru0000".to_string(),
-        "shuji365630@gmail.com".to_string(),
-        hex::encode(tree_hash),
-        message,
-    )
-    .map(GitObject::Commit)?;
-    write_object(&commit)?;
+    let commit = git
+        .commit_tree(
+            "uzimaru0000".to_string(),
+            "shuji365630@gmail.com".to_string(),
+            hex::encode(tree_hash),
+            message,
+        )
+        .map(GitObject::Commit)?;
+    git.write_object(&commit)?;
 
     // git update-ref refs/heads/master <hash>
-    update_ref(head_ref()?, &commit.calc_hash())?;
+    git.update_ref(git.head_ref()?, &commit.calc_hash())?;
 
     Ok(())
+}
+
+fn log<F: FileSystem>(git: &mut Git<F>) -> io::Result<GitObject> {
+    let commit_hash = git.head_ref().and_then(|x| git.read_ref(x))?;
+    let commit = git.read_object(commit_hash)?;
+    git.cat_file_p(&commit)
+}
+
+fn path_split(path: String) -> (Vec<String>, String) {
+    let iter = path.split("/").collect::<Vec<_>>();
+
+    match iter.as_slice() {
+        [path @ .., last] => (
+            path.iter().map(|&x| String::from(x)).collect::<Vec<_>>(),
+            last.to_string(),
+        ),
+        _ => (Vec::new(), String::new()),
+    }
+}
+
+#[test]
+fn test_fs_read() {
+    let fs = InMemFileSystem::init();
+    let data = fs.read(".git/HEAD".to_string());
+
+    println!("{:?}", data);
+
+    if let Err(_) = data {
+        assert!(false);
+    }
+}
+
+#[test]
+fn test_fs_write() {
+    let mut fs = InMemFileSystem::init();
+    let result = fs.write(".git/objects/hoge".to_string(), b"hello");
+
+    println!("{:?}", fs);
+
+    if let Err(_) = result {
+        assert!(false);
+    }
 }
