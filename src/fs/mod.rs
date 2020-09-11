@@ -1,3 +1,5 @@
+pub mod inmem;
+
 use std::io;
 
 pub trait FileSystem {
