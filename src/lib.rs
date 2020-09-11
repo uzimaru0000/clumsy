@@ -18,7 +18,7 @@ use std::io::prelude::*;
 
 #[derive(Debug)]
 pub struct Git<F: FileSystem> {
-    file_system: F,
+    pub file_system: F,
 }
 
 impl<F: FileSystem> Git<F> {

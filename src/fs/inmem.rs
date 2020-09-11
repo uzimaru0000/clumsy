@@ -2,7 +2,7 @@ use super::{FileSystem, Metadata};
 use std::collections::HashMap;
 use std::io;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Entity {
     Dir(HashMap<String, Entity>),
     File(Vec<u8>),
@@ -52,7 +52,7 @@ impl Entity {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemFileSystem {
     root: Entity,
 }
