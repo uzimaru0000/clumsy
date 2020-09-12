@@ -165,12 +165,12 @@ impl<F: FileSystem> Git<F> {
         message: String,
     ) -> io::Result<Commit> {
         let parent = self.head_ref().and_then(|x| self.read_ref(x)).ok();
-        let ts = Utc::now();
-        let offset = {
+        let offs = {
             let local = Local::now();
             *local.offset()
         };
-        let author = commit::User::new(name.clone(), email.clone(), ts, offset);
+        let ts = offs.from_utc_datetime(&Utc::now().naive_utc());
+        let author = commit::User::new(name.clone(), email.clone(), ts);
         let commit = Commit::new(tree_hash, parent, author.clone(), author.clone(), message);
 
         Ok(commit)

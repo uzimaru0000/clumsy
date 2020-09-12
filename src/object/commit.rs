@@ -1,32 +1,30 @@
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
+#[cfg(feature = "json")]
+use serde::Serialize;
 use sha1::{Digest, Sha1};
 use std::fmt;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "json", derive(Serialize))]
 pub struct User {
-    name: String,
-    email: String,
-    ts: DateTime<Utc>,
-    offset: FixedOffset,
+    pub name: String,
+    pub email: String,
+    pub ts: DateTime<FixedOffset>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "json", derive(Serialize))]
 pub struct Commit {
-    tree: String,
-    parent: Option<String>,
-    author: User,
-    committer: User,
-    message: String,
+    pub tree: String,
+    pub parent: Option<String>,
+    pub author: User,
+    pub committer: User,
+    pub message: String,
 }
 
 impl User {
-    pub fn new(name: String, email: String, ts: DateTime<Utc>, offset: FixedOffset) -> Self {
-        Self {
-            name,
-            email,
-            ts,
-            offset,
-        }
+    pub fn new(name: String, email: String, ts: DateTime<FixedOffset>) -> Self {
+        Self { name, email, ts }
     }
 
     pub fn from(bytes: &[u8]) -> Option<Self> {
@@ -66,7 +64,11 @@ impl User {
                 }
             })?;
 
-        Some(Self::new(name, email, ts, offset))
+        Some(Self::new(
+            name,
+            email,
+            offset.from_utc_datetime(&ts.naive_utc()),
+        ))
     }
 }
 
@@ -78,7 +80,7 @@ impl fmt::Display for User {
             self.name,
             self.email,
             self.ts.timestamp(),
-            self.offset.local_minus_utc() / 36
+            self.ts.offset().local_minus_utc() / 36
         )
     }
 }

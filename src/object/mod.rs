@@ -4,6 +4,8 @@ pub mod tree;
 
 use blob::Blob;
 use commit::Commit;
+#[cfg(feature = "json")]
+use serde::Serialize;
 use std::fmt;
 use tree::Tree;
 
@@ -24,7 +26,8 @@ impl ObjectType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "json", derive(Serialize))]
 pub enum GitObject {
     Blob(Blob),
     Tree(Tree),
