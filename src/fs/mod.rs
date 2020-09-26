@@ -1,4 +1,5 @@
 pub mod inmem;
+pub mod mac;
 
 use std::io;
 

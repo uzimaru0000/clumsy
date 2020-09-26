@@ -1,15 +1,19 @@
 use clumsy::fs::inmem::InMemFileSystem;
+use clumsy::fs::mac::MacOSFileSystem;
 use clumsy::fs::FileSystem;
 use clumsy::object::GitObject;
 use clumsy::*;
 use std::io;
 
 fn main() -> io::Result<()> {
-    let mut fs = InMemFileSystem::init();
-    fs.write("test.txt".to_string(), b"Hello, World")?;
+    let mut fs = MacOSFileSystem::init()?;
+    let path = String::from("test.txt");
+    let data = b"Hello, World";
+
+    fs.write(path.clone(), data)?;
     let mut git = Git::new(fs);
 
-    add(&mut git, "test.txt".to_string(), b"Hello, World")?;
+    add(&mut git, path.clone(), &data.to_vec())?;
     commit(&mut git, "init commit".to_string())?;
 
     let commit = log(&mut git)?;
