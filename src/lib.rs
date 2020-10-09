@@ -94,14 +94,7 @@ impl<F: FileSystem> Git<F> {
         let mut buf = Vec::new();
         d.read_to_end(&mut buf)?;
 
-        let mut iter = buf.splitn(2, |&byte| byte == b'\0');
-
-        iter.next()
-            .and_then(|x| String::from_utf8(x.to_vec()).ok())
-            .and_then(check_type)
-            .and_then(|t| iter.next().map(|x| (t, x)))
-            .and_then(|(t, b)| GitObject::new(t, b))
-            .ok_or(io::Error::from(io::ErrorKind::InvalidData))
+        GitObject::new(&buf).ok_or(io::Error::from(io::ErrorKind::InvalidData))
     }
 
     pub fn ls_files_stage(&self, bytes: &[u8]) -> io::Result<Index> {
@@ -179,15 +172,4 @@ impl<F: FileSystem> Git<F> {
     pub fn update_ref(&mut self, path: String, hash: &[u8]) -> io::Result<()> {
         self.write_ref(path, hash)
     }
-}
-
-fn check_type(header: String) -> Option<ObjectType> {
-    let mut header = header.split_whitespace();
-
-    header.next().and_then(|t| match t {
-        "blob" => Some(ObjectType::Blob),
-        "tree" => Some(ObjectType::Tree),
-        "commit" => Some(ObjectType::Commit),
-        _ => None,
-    })
 }

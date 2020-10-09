@@ -17,6 +17,17 @@ pub enum ObjectType {
 }
 
 impl ObjectType {
+    pub fn from(s: &str) -> Option<Self> {
+        let mut header = s.split_whitespace();
+
+        match header.next()? {
+            "blob" => Some(ObjectType::Blob),
+            "tree" => Some(ObjectType::Tree),
+            "commit" => Some(ObjectType::Commit),
+            _ => None,
+        }
+    }
+
     pub fn to_string(self) -> String {
         match self {
             ObjectType::Blob => String::from("blob"),
@@ -34,7 +45,14 @@ pub enum GitObject {
 }
 
 impl GitObject {
-    pub fn new(obj_type: ObjectType, bytes: &[u8]) -> Option<Self> {
+    pub fn new(bytes: &[u8]) -> Option<Self> {
+        let mut iter = bytes.splitn(2, |&byte| byte == b'\0');
+
+        let obj_type = iter
+            .next()
+            .and_then(|x| String::from_utf8(x.to_vec()).ok())
+            .and_then(|x| ObjectType::from(&x))?;
+
         match obj_type {
             ObjectType::Blob => Blob::from(bytes).map(GitObject::Blob),
             ObjectType::Tree => Tree::from(bytes).map(GitObject::Tree),
@@ -45,7 +63,7 @@ impl GitObject {
     pub fn calc_hash(&self) -> Vec<u8> {
         match self {
             Self::Blob(obj) => obj.calc_hash(),
-            Self::Tree(obj) => obj.calc_hash().unwrap_or_default(),
+            Self::Tree(obj) => obj.calc_hash(),
             Self::Commit(obj) => obj.calc_hash(),
         }
     }
@@ -53,7 +71,7 @@ impl GitObject {
     pub fn as_bytes(&self) -> Vec<u8> {
         match self {
             Self::Blob(obj) => obj.as_bytes(),
-            Self::Tree(obj) => obj.as_bytes().unwrap_or_default(),
+            Self::Tree(obj) => obj.as_bytes(),
             Self::Commit(obj) => obj.as_bytes(),
         }
     }

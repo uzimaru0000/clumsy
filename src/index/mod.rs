@@ -49,7 +49,7 @@ impl Entry {
         }
     }
 
-    pub fn from(bytes: &[u8]) -> Option<(Self, usize)> {
+    pub fn from(bytes: &[u8]) -> Option<Self> {
         let c_time = hex_to_num(&bytes[0..4]);
         let c_time_nano = hex_to_num(&bytes[4..8]);
         let m_time = hex_to_num(&bytes[8..12]);
@@ -77,9 +77,7 @@ impl Entry {
             name,
         };
 
-        let size = 62 + name_size as usize;
-
-        Some((entry, size + (8 - size % 8)))
+        Some(entry)
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -111,6 +109,11 @@ impl Entry {
             padding,
         ]
         .concat()
+    }
+
+    pub fn size(&self) -> usize {
+        let size = 62 + self.name.len();
+        size + (8 - size % 8)
     }
 }
 
@@ -145,7 +148,8 @@ impl Index {
         let entry_num = hex_to_num(&bytes[8..12]);
         let entries = (0..entry_num)
             .try_fold((0, Vec::new()), |(offs, mut vec), _| {
-                let (entry, size) = Entry::from(&bytes[(12 + offs)..])?;
+                let entry = Entry::from(&bytes[(12 + offs)..])?;
+                let size = entry.size();
                 vec.push(entry);
                 Some((offs + size, vec))
             })
@@ -223,8 +227,8 @@ fn test_entry_from() {
     ];
 
     let expected = Entry::from(&bytes);
-    if let Some((_, size)) = expected {
-        assert_eq!(size, 96);
+    if let Some(entry) = expected {
+        assert_eq!(entry.size(), 96);
         assert!(true);
     } else {
         assert!(false);
@@ -322,7 +326,7 @@ fn test_entry_as_bytes() {
     ];
 
     let entry = Entry::from(&bytes);
-    if let Some((e, _)) = entry {
+    if let Some(e) = entry {
         assert_eq!(e.as_bytes(), Vec::from(&bytes[..]));
     } else {
         assert!(false);

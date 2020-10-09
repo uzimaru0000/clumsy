@@ -38,9 +38,9 @@ impl File {
         Some(Self::new(mode, String::from(name), hash))
     }
 
-    pub fn encode(&self) -> Option<Vec<u8>> {
+    pub fn encode(&self) -> Vec<u8> {
         let header = format!("{} {}\0", self.mode, self.name);
-        Some([header.as_bytes(), &self.hash].concat())
+        [header.as_bytes(), &self.hash].concat()
     }
 }
 
@@ -77,23 +77,16 @@ impl Tree {
 
         Some(Self { contents })
     }
-    pub fn calc_hash(&self) -> Option<Vec<u8>> {
-        let bytes = self.as_bytes()?;
-        Some(Vec::from(Sha1::digest(&bytes).as_slice()))
+    pub fn calc_hash(&self) -> Vec<u8> {
+        let bytes = self.as_bytes();
+        Vec::from(Sha1::digest(&bytes).as_slice())
     }
 
-    pub fn as_bytes(&self) -> Option<Vec<u8>> {
-        let content =
-            self.contents
-                .iter()
-                .map(|x| x.encode())
-                .try_fold(Vec::new(), |mut acc, x| {
-                    acc.append(&mut x?);
-                    Some(acc)
-                })?;
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let content: Vec<u8> = self.contents.iter().flat_map(|x| x.encode()).collect();
         let header = format!("{} {}\0", ObjectType::Tree.to_string(), content.len());
 
-        Some([header.as_bytes(), content.as_slice()].concat())
+        [header.as_bytes(), content.as_slice()].concat()
     }
 }
 
