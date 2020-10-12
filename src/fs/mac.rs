@@ -4,13 +4,16 @@ use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
+#[cfg(target_os = "macos")]
 use std::os::macos::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+#[cfg(target_os = "macos")]
 pub struct MacOSFileSystem {
     root: PathBuf,
 }
 
+#[cfg(target_os = "macos")]
 impl MacOSFileSystem {
     pub fn init() -> io::Result<Self> {
         Ok(MacOSFileSystem {
@@ -19,6 +22,7 @@ impl MacOSFileSystem {
     }
 }
 
+#[cfg(target_os = "macos")]
 impl FileSystem for MacOSFileSystem {
     fn read(&self, path: String) -> io::Result<Vec<u8>> {
         let mut file = File::open(self.root.join(path))?;
