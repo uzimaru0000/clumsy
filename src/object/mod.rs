@@ -53,11 +53,11 @@ impl GitObject {
             .and_then(|x| String::from_utf8(x.to_vec()).ok())
             .and_then(|x| ObjectType::from(&x))?;
 
-        match obj_type {
-            ObjectType::Blob => Blob::from(bytes).map(GitObject::Blob),
-            ObjectType::Tree => Tree::from(bytes).map(GitObject::Tree),
-            ObjectType::Commit => Commit::from(bytes).map(GitObject::Commit),
-        }
+        iter.next().and_then(|x| match obj_type {
+            ObjectType::Blob => Blob::from(x).map(GitObject::Blob),
+            ObjectType::Tree => Tree::from(x).map(GitObject::Tree),
+            ObjectType::Commit => Commit::from(x).map(GitObject::Commit),
+        })
     }
 
     pub fn calc_hash(&self) -> Vec<u8> {
