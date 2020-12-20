@@ -54,6 +54,18 @@ impl Entity {
             Err(io::Error::from(io::ErrorKind::NotFound))
         }
     }
+
+    pub fn remove(&mut self, name: String) -> io::Result<()> {
+        let (path, name) = path_split(name);
+        match path.len() {
+            0 => if let Self::Dir(dir) = self { 
+                dir.remove(&name).ok_or(io::Error::from(io::ErrorKind::InvalidInput)).map(|_| ())
+            } else {
+                Err(io::Error::from(io::ErrorKind::InvalidInput))
+            },
+            _ => self.change_dir_mut(path.join("/")).and_then(|x| x.remove(name))
+        }
+    }
 }
 
 #[cfg(feature = "json")]
@@ -156,6 +168,16 @@ impl FileSystem for InMemFileSystem {
         self.root
             .change_dir_mut(dir_name.join("/"))
             .and_then(|x| x.make_dir(dir))
+    }
+
+    fn rename(&mut self, from: String, to: String) -> io::Result<()> {
+        let file = self.read(from.clone())?;
+        self.remove(from.clone())?;
+        self.write(to, &file)
+    }
+
+    fn remove(&mut self, path: String) -> io::Result<()> {
+        self.root.remove(path)
     }
 }
 

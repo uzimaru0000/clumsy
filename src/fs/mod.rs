@@ -8,6 +8,8 @@ pub trait FileSystem {
     fn write(&mut self, path: String, data: &[u8]) -> io::Result<()>;
     fn stat(&self, path: String) -> io::Result<Metadata>;
     fn create_dir(&mut self, path: String) -> io::Result<()>;
+    fn rename(&mut self, from: String, to: String) -> io::Result<()>;
+    fn remove(&mut self, path: String) -> io::Result<()>;
 }
 
 #[derive(Debug)]
