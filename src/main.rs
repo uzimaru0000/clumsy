@@ -31,11 +31,14 @@ fn main() -> io::Result<()> {
             add(&mut git, args.get(2).unwrap().clone(), &bytes)
         }
         "commit" => commit(&mut git, args.get(2).unwrap().clone()),
+        "switch" => switch(&mut git, args.get(2).unwrap().clone()),
+        "log" => {
+            let obj = log(&mut git)?;
+            obj.iter().for_each(|x| println!("{}", x));
+            Ok(())
+        },
         _ => Ok(()),
     }
-
-    // let branch = args.get(1).unwrap().clone();
-    // switch(&mut git, branch)?;
 }
 
 pub fn cat_file_p(hash: String) -> io::Result<GitObject> {
@@ -67,7 +70,8 @@ pub fn add<F: FileSystem>(git: &mut Git<F>, file_name: String, bytes: &[u8]) -> 
     git.write_object(&blob)?;
 
     // git update-index --add --cacheinfo <mode> <hash> <name>
-    let index = git.update_index(&blob.calc_hash(), file_name)?;
+    let index = git.read_index().and_then(|x| git.ls_files_stage(&x))?;
+    let index = git.update_index(index, &blob.calc_hash(), file_name)?;
     git.write_index(&index)?;
     println!("write_index");
 
@@ -97,75 +101,56 @@ fn commit<F: FileSystem>(git: &mut Git<F>, message: String) -> io::Result<()> {
     Ok(())
 }
 
-fn log<F: FileSystem>(git: &mut Git<F>) -> io::Result<GitObject> {
-    let commit_hash = git.head_ref().and_then(|x| git.read_ref(x))?;
-    let commit = git.read_object(commit_hash)?;
-    git.cat_file_p(&commit)
+fn log<F: FileSystem>(git: &mut Git<F>) -> io::Result<Vec<GitObject>> {
+    let commit = git
+        .head_ref()
+        .and_then(|x| git.read_ref(x))
+        .and_then(|x| git.read_object(x))
+        .and_then(|x| git.cat_file_p(&x))?;
+
+    Ok((0..)
+        .scan(Some(commit), |st, _| {
+            let next = match st {
+                Some(GitObject::Commit(commit)) => {
+                    if let Some(parent) = &commit.parent {
+                        git
+                            .read_object(parent.clone())
+                            .and_then(|x| git.cat_file_p(&x))
+                            .ok()
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            let curr = st.clone();
+            *st = next;
+            curr
+        })
+        .collect::<Vec<_>>())
 }
 
 fn switch<F: FileSystem>(git: &mut Git<F>, branch: String) -> io::Result<()> {
     let commit_hash = git.read_ref(format!("refs/heads/{}", branch))?;
+    let diff = git.reset_index(commit_hash.clone())?;
+
+    git.diff_apply(diff)?;
+
     let commit = git
         .read_object(commit_hash)
         .and_then(|x| git.cat_file_p(&x))
-        .and_then(|x| {
-            if let GitObject::Commit(commit) = x {
-                Ok(commit)
-            } else {
-                Err(io::Error::from(io::ErrorKind::InvalidData))
-            }
+        .and_then(|x| match x {
+            GitObject::Commit(commit) => Ok(commit),
+            _ => Err(io::Error::from(io::ErrorKind::InvalidData)),
         })?;
-    let tree = git
-        .read_object(commit.tree)
-        .and_then(|x| git.cat_file_p(&x))
-        .and_then(|x| {
-            if let GitObject::Tree(tree) = x {
-                Ok(tree)
-            } else {
-                Err(io::Error::from(io::ErrorKind::InvalidData))
-            }
-        })?;
-
-    walk(git, String::new(), tree)?;
+    let idx = git.tree2index(commit.tree)?;
 
     git.file_system.write(
         ".git/HEAD".to_string(),
         format!("ref: refs/heads/{}", branch).as_bytes(),
     )?;
 
+    git.write_index(&idx)?;
+
     Ok(())
-}
-
-fn walk<F: FileSystem>(git: &mut Git<F>, path: String, tree: object::tree::Tree) -> io::Result<()> {
-    tree.contents.into_iter().try_for_each(|x| match x.mode {
-        100644 => {
-            let file = git
-                .read_object(hex::encode(x.hash))
-                .and_then(|x| git.cat_file_p(&x))
-                .and_then(|x| {
-                    if let GitObject::Blob(blob) = x {
-                        Ok(blob)
-                    } else {
-                        Err(io::Error::from(io::ErrorKind::InvalidData))
-                    }
-                })?;
-
-            git.file_system
-                .write(format!("{}{}", path, x.name), file.content.as_bytes())
-        }
-        40000 => {
-            let tree = git
-                .read_object(hex::encode(x.hash))
-                .and_then(|x| git.cat_file_p(&x))
-                .and_then(|x| {
-                    if let GitObject::Tree(tree) = x {
-                        Ok(tree)
-                    } else {
-                        Err(io::Error::from(io::ErrorKind::InvalidData))
-                    }
-                })?;
-            walk(git, format!("{}{}/", path, x.name), tree)
-        }
-        _ => Err(io::Error::from(io::ErrorKind::InvalidData)),
-    })
 }

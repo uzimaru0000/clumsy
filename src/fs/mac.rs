@@ -56,4 +56,15 @@ impl FileSystem for MacOSFileSystem {
         let path = self.root.join(path);
         fs::create_dir_all(path)
     }
+
+    fn rename(&mut self, from: String, to: String) -> io::Result<()> {
+        let from = self.root.join(from);
+        let to = self.root.join(to);
+        fs::rename(from, to)
+    }
+
+    fn remove(&mut self, path: String) -> io::Result<()> {
+        let path = self.root.join(path);
+        fs::remove_file(path)
+    }
 }

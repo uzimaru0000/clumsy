@@ -3,7 +3,9 @@ use sha1::{Digest, Sha1};
 use std;
 use std::fmt;
 
-#[derive(Debug)]
+pub mod diff;
+
+#[derive(Debug, Clone)]
 pub struct Entry {
     pub c_time: DateTime<Utc>,
     pub m_time: DateTime<Utc>,
@@ -17,7 +19,7 @@ pub struct Entry {
     pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Index {
     pub entries: Vec<Entry>,
 }
